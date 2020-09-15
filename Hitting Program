@@ -1,0 +1,126 @@
+‘{$STAMP BS2}                   ‘inform the editor that you are using the BS2 module
+‘This is the hitting program.
+‘list of control pins, see circuit diagram above
+‘p0 = IN1 (L298)
+‘p1 = IN2 (L298)
+‘p2 = IN3 (L298)
+‘p3 = IN4 (L298)
+‘p4 = ENB (L298)
+‘p5 = ENA (L298)
+‘p6isadelaysignal. Thepulsout instruction is used to out put a 2μs - resolution pulse to give a delay time
+‘p7 is not used
+‘p9 and p10 used for the QTI sensor
+DIRL=%11111111    ‘set pins p0, p1, p2, p3, p4, p5, p6, p7 to out direction because this port is
+                  dedicated ‘to controlling the L298 Keyes driver and to create a time delay
+                  
+a   VAR Word
+i   VAR Word
+j   VAR Word
+k   VAR Nib
+sense VAR Word  ’QTI sensor variable that detects the arm position by measuring light intensity
+b CON 21        ‘acceleration constant used in “hit” subroutine. Bigger number equals bigger
+                ‘acceleration
+c CON 1
+d CON 7’5 is fastest FOR vertical position 8 is ok for 45deg
+
+OUTL=%00100001  ’ensuremotorcurrentisoff forsafety,ENA andENB are sethighto turnoffL298
+PAUSE 1000      ‘ wait 1 second before running the programme. This is to allow updated
+                programmes ‘to be downloaded before the old one starts running
+                
+‘START OF MAIN PROGRAM
+    a=1400                ‘This is the delay value to give a slow speed suitable for datuming
+skip1: OSUB backdirn      ‘Go backwards to datum the arm position with the arm at the QTI sensor
+GOSUB readsensor          ‘got to the subroutine that checks to read the light intensity
+IF sense>1000 THEN skip1      ’arm not in view so keep going backwards. Note higher number
+                              ‘means low light; lower number means high light and arm is
+                              in view
+PAUSE 100                 ’sense<1001 so arm is in view at datum point
+                        wait for 0.1 second for arm to stabilise
+FOR i=1 TO 41             ‘drive arm backwards by 295° to above the tee without interfering
+                          with ball
+GOSUB backdirn            ‘backwards by 8 steps (will do this 41 times)
+GOSUB hit                 ‘now accelerate forwards to hit the ball at maximum speed
+PAUSE 100                 ‘wait for 0.1 s for arm to stabilise
+OUTL=%00100001            ’job done so ensure motor current is off for safety
+
+‘END OF MAIN PROGRAM
+again1: GOTO again1       ‘infinite loop to end the programme
+readsensor: HIGH 10       ‘read the reflected light intensity of the QTI sensor
+            HIGH 9
+            PAUSE 1
+            RCTIME 9,1,sense ‘resistance of the junction is an inverse measure of light
+                              intensity
+            LOW 10
+‘DEBUG DEC sense,CR     ‘use debug to check values of sense. Make sure it is deactivated as a ‘comment
+                        when ‘running programme in real time because debug take 5 ms of valuable
+                        execution time
+            RETURN        ‘return from subroutine to main program
+
+Hit:  ‘acceleration phase to maximum speed in 0.9 of a revolution (324°) to hit ball
+      a=1000
+      FOR i=1 TO 45   ‘45 loops of 8 steps/loop hence giving 360 x ½ steps, i.e. 324° of a revolution
+      a=a-b           ‘variable, “a” is the periodic time between steps. Variable “b” is the
+                      acceleration ‘constant. Here we accelerate from below pull-in speed, a = 1000 - b
+                      to maximum speed,
+                      ‘a = 1000-(45xb)
+      OUTL=%00100011      ’ ½ step phase 1
+      PULSOUT 6,a         ‘delay (a x 2 μs) which is the period of the frequency of each step
+      OUTL=%00101011      ’ ½ step phase 2
+      PULSOUT 6,a
+      OUTL=%00101001      ’ ½ step phase 3
+      PULSOUT 6,a
+      OUTL=%00101101      ’ ½ step phase 4
+      PULSOUT 6,a
+      OUTL=%00100101      ’ ½ step phase 5
+      PULSOUT 6,a
+      OUTL=%00110101      ’ ½ step phase 6
+      PULSOUT 6,a
+      OUTL=%00110001      ’ ½ step phase 7                      
+      PULSOUT 6,a
+      OUTL=%00110011      ’ ½ step phase 8
+      PULSOUT 6,a
+      NEXT
+      ‘deceleration phase to slow back down to below pull-in speed, i.e. reverse the acceleration
+      procedure
+      FOR i=1 TO 45
+      a=a+b
+      OUTL=%00100011      ‘ ½ step phase 1
+      PULSOUT 6,a
+      OUTL=%00101011      ‘ ½ step phase 2
+      PULSOUT 6,a
+      OUTL=%00101001      ‘ ½ step phase 3
+      PULSOUT 6,a
+      OUTL=%00101101      ‘ ½ step phase 4
+      PULSOUT 6,a
+      OUTL=%00100101      ‘ ½ step phase 5
+      PULSOUT 6,a
+      OUTL=%00110101      ‘ ½ step phase 6
+      PULSOUT 6,a
+      OUTL=%00110001      ‘ ½ step phase 7
+      PULSOUT 6,a
+      OUTL=%00110011      ‘ ½ step phase 8
+      PULSOUT 6,a
+      NEXT
+      RETURN
+ 
+ backdirn:a=1000          ‘set a new periodic step delay, slightly faster but still inside pull-in speed
+      OUTL=%00110011      ‘ ½ step phase 8 start from phase 8 and go backwards, 7, 6, 5 etc
+      PULSOUT 6,a
+      OUTL=%00110001      ‘ ½ step phase 7
+      PULSOUT 6,a
+      OUTL=%00110101      ‘ ½ step phase 6
+      PULSOUT 6,a
+      OUTL=%00100101      ‘ ½ step phase 5
+      PULSOUT 6,a
+      OUTL=%00101101      ‘ ½ step phase 4
+      PULSOUT 6,a
+      OUTL=%00101001      ‘ ½ step phase 3
+      PULSOUT 6,a
+      OUTL=%00101011      ‘ ½ step phase 2
+      PULSOUT 6,a
+      OUTL=%00100011      ‘ ½ step phase 1
+      PULSOUT 6,a
+      RETURN
+      
+'Future Projects:  Augmented Reality Analysis.  Use of a high-speed camera to procure data related to deformities upon impact.  
+'Check using oscilloscope, which is more accurate than Basic Stamp clock. 
